@@ -1,4 +1,4 @@
-# Installing gh on Linux and BSD
+curl -sS https://webi.sh/gh \| sh# Installing gh on Linux and BSD
 
 ## Recommended _(Official)_
 
