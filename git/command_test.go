@@ -44,7 +44,7 @@ func TestOutput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			cmd := Command{
-				&exec.Cmd{
+				Cmd: &exec.Cmd{
 					Path: createMockExecutable(t, tt.stdout, tt.stderr, tt.exitCode),
 				},
 			}
@@ -61,6 +61,61 @@ func TestOutput(t *testing.T) {
 				require.NoError(t, err)
 			}
 			assert.Equal(t, tt.stdout, string(out))
+		})
+	}
+}
+
+func TestSetRepoDir(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "inserts repo dir after command",
+			args: []string{"git", "status"},
+			want: []string{"git", "-C", "/path/to/repo", "status"},
+		},
+		{
+			name: "updates existing repo dir",
+			args: []string{"git", "-C", "/old/path", "status"},
+			want: []string{"git", "-C", "/path/to/repo", "status"},
+		},
+		{
+			name: "completes dangling repo dir flag",
+			args: []string{"git", "-C"},
+			want: []string{"git", "-C", "/path/to/repo"},
+		},
+		{
+			name: "handles short args",
+			args: []string{"git"},
+			want: []string{"git", "-C", "/path/to/repo"},
+		},
+		{
+			name: "inserts repo dir before git pathspec separator",
+			args: []string{"git", "diff", "--", "file.txt"},
+			want: []string{"git", "-C", "/path/to/repo", "diff", "--", "file.txt"},
+		},
+		{
+			name: "inserts repo dir after helper process args",
+			args: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "status"},
+			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "-C", "/path/to/repo", "status"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argsPrefixLen := commandArgsPrefixLen(tt.args, "git")
+			cmd := Command{
+				Cmd: &exec.Cmd{
+					Args: append([]string{}, tt.args...),
+				},
+				argsPrefixLen: argsPrefixLen,
+			}
+
+			cmd.setRepoDir("/path/to/repo")
+
+			assert.Equal(t, tt.want, cmd.Args)
 		})
 	}
 }

@@ -14,6 +14,7 @@ type commandCtx = func(ctx context.Context, name string, args ...string) *exec.C
 
 type Command struct {
 	*exec.Cmd
+	argsPrefixLen int
 }
 
 func (gc *Command) Run() error {
@@ -67,20 +68,21 @@ func (gc *Command) Output() ([]byte, error) {
 func (gc *Command) setRepoDir(repoDir string) {
 	for i, arg := range gc.Args {
 		if arg == "-C" {
-			gc.Args[i+1] = repoDir
+			if i+1 < len(gc.Args) {
+				gc.Args[i+1] = repoDir
+			} else {
+				gc.Args = append(gc.Args, repoDir)
+			}
 			return
 		}
 	}
-	// Handle "--" invocations for testing purposes.
-	var index int
-	for i, arg := range gc.Args {
-		if arg == "--" {
-			index = i + 1
-		}
+
+	insertAt := gc.argsPrefixLen + 1
+	if insertAt > len(gc.Args) {
+		insertAt = len(gc.Args)
 	}
-	gc.Args = append(gc.Args[:index+3], gc.Args[index+1:]...)
-	gc.Args[index+1] = "-C"
-	gc.Args[index+2] = repoDir
+
+	gc.Args = append(gc.Args[:insertAt], append([]string{"-C", repoDir}, gc.Args[insertAt:]...)...)
 }
 
 // Allow individual commands to be modified from the default client options.
