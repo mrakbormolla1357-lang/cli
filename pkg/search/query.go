@@ -16,7 +16,21 @@ const (
 )
 
 type Query struct {
-	Keywords   []string
+	// Keywords holds the list of keywords to search for. These keywords are
+	// treated as individual components of a search query, and will get quoted
+	// as needed. This is useful when the input can be supplied as a list of
+	// search keywords.
+	//
+	// This field is overridden by ImmutableKeywords.
+	Keywords []string
+
+	// ImmutableKeywords holds the search keywords as a single string, and will
+	// be treated as is (e.g. no additional quoting). This is useful when the
+	// input is meant to be taken verbatim from the user.
+	//
+	// This field takes precedence over Keywords.
+	ImmutableKeywords string
+
 	Kind       string
 	Limit      int
 	Order      string
@@ -82,6 +96,7 @@ type Qualifiers struct {
 	Topics              string
 	Tree                string
 	Type                string
+	IssueType           string `qualifier:"type"`
 	Updated             string
 	User                []string
 }
@@ -103,7 +118,12 @@ type Qualifiers struct {
 // issues, and it's called advanced issue search.
 func (q Query) StandardSearchString() string {
 	qualifiers := formatQualifiers(q.Qualifiers, nil)
-	keywords := formatKeywords(q.Keywords)
+	var keywords []string
+	if q.ImmutableKeywords != "" {
+		keywords = []string{q.ImmutableKeywords}
+	} else if ks := formatKeywords(q.Keywords); len(ks) > 0 {
+		keywords = ks
+	}
 	all := append(keywords, qualifiers...)
 	return strings.TrimSpace(strings.Join(all, " "))
 }
@@ -124,10 +144,25 @@ func (q Query) StandardSearchString() string {
 //
 // The advanced syntax is documented at https://github.blog/changelog/2025-03-06-github-issues-projects-api-support-for-issues-advanced-search-and-more
 func (q Query) AdvancedIssueSearchString() string {
-	qualifiers := formatQualifiers(q.Qualifiers, formatAdvancedIssueSearch)
-	keywords := formatKeywords(q.Keywords)
-	all := append(keywords, qualifiers...)
-	return strings.TrimSpace(strings.Join(all, " "))
+	qualifiers := strings.Join(formatQualifiers(q.Qualifiers, formatAdvancedIssueSearch), " ")
+	keywords := q.ImmutableKeywords
+	if keywords == "" {
+		keywords = strings.Join(formatKeywords(q.Keywords), " ")
+	}
+
+	if qualifiers == "" && keywords == "" {
+		return ""
+	}
+
+	if qualifiers != "" && keywords != "" {
+		// We should surround keywords with brackets to avoid leaking of any operators, especially "OR"s.
+		return fmt.Sprintf("( %s ) %s", keywords, qualifiers)
+	}
+
+	if keywords != "" {
+		return keywords
+	}
+	return qualifiers
 }
 
 func formatAdvancedIssueSearch(qualifier string, vs []string) (s []string, applicable bool) {
@@ -200,39 +235,42 @@ func groupWithOR(qualifier string, vs []string) string {
 	return fmt.Sprintf("(%s)", strings.Join(all, " OR "))
 }
 
+// Map turns the qualifiers into a slice-keyed map ready for query
+// formatting. Multiple struct fields can share the same key when
+// tagged with `qualifier:"<name>"`; in that case their values are
+// concatenated under the shared key.
 func (q Qualifiers) Map() map[string][]string {
 	m := map[string][]string{}
 	v := reflect.ValueOf(q)
 	t := reflect.TypeOf(q)
 	for i := 0; i < v.NumField(); i++ {
-		fieldName := t.Field(i).Name
-		key := camelToKebab(fieldName)
-		typ := v.FieldByName(fieldName).Kind()
-		value := v.FieldByName(fieldName)
-		switch typ {
+		field := t.Field(i)
+		key := field.Tag.Get("qualifier")
+		if key == "" {
+			key = camelToKebab(field.Name)
+		}
+		value := v.Field(i)
+		switch value.Kind() {
 		case reflect.Ptr:
 			if value.IsNil() {
 				continue
 			}
-			v := reflect.Indirect(value)
-			m[key] = []string{fmt.Sprintf("%v", v)}
+			m[key] = append(m[key], fmt.Sprintf("%v", reflect.Indirect(value)))
 		case reflect.Slice:
 			if value.IsNil() {
 				continue
 			}
-			s := []string{}
-			for i := 0; i < value.Len(); i++ {
-				if value.Index(i).IsZero() {
+			for j := 0; j < value.Len(); j++ {
+				if value.Index(j).IsZero() {
 					continue
 				}
-				s = append(s, fmt.Sprintf("%v", value.Index(i)))
+				m[key] = append(m[key], fmt.Sprintf("%v", value.Index(j)))
 			}
-			m[key] = s
 		default:
 			if value.IsZero() {
 				continue
 			}
-			m[key] = []string{fmt.Sprintf("%v", value)}
+			m[key] = append(m[key], fmt.Sprintf("%v", value))
 		}
 	}
 	return m

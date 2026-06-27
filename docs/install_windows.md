@@ -11,13 +11,13 @@ The [GitHub CLI package](https://winget.run/pkg/GitHub/cli) is supported by Micr
 To install:
 
 ```pwsh
-winget install --id GitHub.cli
+winget install --id GitHub.cli --source winget
 ```
 
 To upgrade:
 
 ```pwsh
-winget upgrade --id GitHub.cli
+winget upgrade --id GitHub.cli --source winget
 ```
 
 > [!NOTE]

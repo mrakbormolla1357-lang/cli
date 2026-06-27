@@ -3,6 +3,7 @@ package set
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,7 +19,6 @@ import (
 	"github.com/cli/cli/v2/pkg/cmd/secret/shared"
 	"github.com/cli/cli/v2/pkg/cmdutil"
 	"github.com/cli/cli/v2/pkg/iostreams"
-	"github.com/hashicorp/go-multierror"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/nacl/box"
@@ -63,9 +63,9 @@ func NewCmdSet(f *cmdutil.Factory, runF func(*SetOptions) error) *cobra.Command 
 		Short: "Create or update secrets",
 		Long: heredoc.Doc(`
 			Set a value for a secret on one of the following levels:
-			- repository (default): available to GitHub Actions runs or Dependabot in a repository
+			- repository (default): available to GitHub Actions runs, Agents sessions, or Dependabot in a repository
 			- environment: available to GitHub Actions runs for a deployment environment in a repository
-			- organization: available to GitHub Actions runs, Dependabot, or Codespaces within an organization
+			- organization: available to GitHub Actions runs, Agents sessions, Dependabot, or Codespaces within an organization
 			- user: available to Codespaces for your user
 
 			Organization and user secrets can optionally be restricted to only be available to
@@ -195,7 +195,7 @@ func NewCmdSet(f *cmdutil.Factory, runF func(*SetOptions) error) *cobra.Command 
 	cmd.Flags().StringVarP(&opts.Body, "body", "b", "", "The value for the secret (reads from standard input if not specified)")
 	cmd.Flags().BoolVar(&opts.DoNotStore, "no-store", false, "Print the encrypted, base64-encoded value instead of storing it on GitHub")
 	cmd.Flags().StringVarP(&opts.EnvFile, "env-file", "f", "", "Load secret names and values from a dotenv-formatted `file`")
-	cmdutil.StringEnumFlag(cmd, &opts.Application, "app", "a", "", []string{shared.Actions, shared.Codespaces, shared.Dependabot}, "Set the application for a secret")
+	cmdutil.StringEnumFlag(cmd, &opts.Application, "app", "a", "", []string{shared.Actions, shared.Agents, shared.Codespaces, shared.Dependabot}, "Set the application for a secret")
 
 	return cmd
 }
@@ -295,12 +295,12 @@ func setRun(opts *SetOptions) error {
 		}()
 	}
 
-	err = nil
+	var errs []error
 	cs := opts.IO.ColorScheme()
 	for i := 0; i < len(secrets); i++ {
 		result := <-setc
 		if result.err != nil {
-			err = multierror.Append(err, result.err)
+			errs = append(errs, result.err)
 			continue
 		}
 		if result.encrypted != "" {
@@ -318,7 +318,7 @@ func setRun(opts *SetOptions) error {
 		}
 		fmt.Fprintf(opts.IO.Out, "%s Set %s secret %s for %s\n", cs.SuccessIcon(), secretApp.Title(), result.key, target)
 	}
-	return err
+	return errors.Join(errs...)
 }
 
 type setResult struct {

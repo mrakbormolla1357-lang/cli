@@ -61,6 +61,9 @@ func NewCmdDelete(f *cmdutil.Factory, runF func(*DeleteOptions) error) *cobra.Co
 			# Delete all caches (exit code 1 on no caches)
 			$ gh cache delete --all
 
+			# Delete all caches for a specific ref
+			$ gh cache delete --all --ref refs/pull/<PR-number>/merge
+
 			# Delete all caches (exit code 0 on no caches)
 			$ gh cache delete --all --succeed-on-no-caches
 		`),
@@ -76,18 +79,11 @@ func NewCmdDelete(f *cmdutil.Factory, runF func(*DeleteOptions) error) *cobra.Co
 				return err
 			}
 
-			if err := cmdutil.MutuallyExclusive(
-				"--ref cannot be used with --all",
-				opts.DeleteAll, opts.Ref != "",
-			); err != nil {
-				return err
-			}
-
 			if !opts.DeleteAll && opts.SucceedOnNoCaches {
 				return cmdutil.FlagErrorf("--succeed-on-no-caches must be used in conjunction with --all")
 			}
 
-			if opts.Ref != "" && len(args) == 0 {
+			if opts.Ref != "" && len(args) == 0 && !opts.DeleteAll {
 				return cmdutil.FlagErrorf("must provide a cache key")
 			}
 
@@ -113,7 +109,7 @@ func NewCmdDelete(f *cmdutil.Factory, runF func(*DeleteOptions) error) *cobra.Co
 		},
 	}
 
-	cmd.Flags().BoolVarP(&opts.DeleteAll, "all", "a", false, "Delete all caches")
+	cmd.Flags().BoolVarP(&opts.DeleteAll, "all", "a", false, "Delete all caches, can be used with --ref to delete all caches for a specific ref")
 	cmd.Flags().StringVarP(&opts.Ref, "ref", "r", "", "Delete by cache key and ref, formatted as refs/heads/<branch name> or refs/pull/<number>/merge")
 	cmd.Flags().BoolVar(&opts.SucceedOnNoCaches, "succeed-on-no-caches", false, "Return exit code 0 if no caches found. Must be used in conjunction with `--all`")
 
@@ -135,7 +131,7 @@ func deleteRun(opts *DeleteOptions) error {
 	var toDelete []string
 	if opts.DeleteAll {
 		opts.IO.StartProgressIndicator()
-		caches, err := shared.GetCaches(client, repo, shared.GetCachesOptions{Limit: -1})
+		caches, err := shared.GetCaches(client, repo, shared.GetCachesOptions{Limit: -1, Ref: opts.Ref})
 		opts.IO.StopProgressIndicator()
 		if err != nil {
 			return err
@@ -151,7 +147,7 @@ func deleteRun(opts *DeleteOptions) error {
 			}
 		}
 		for _, cache := range caches.ActionsCaches {
-			toDelete = append(toDelete, strconv.Itoa(cache.Id))
+			toDelete = append(toDelete, strconv.FormatInt(cache.Id, 10))
 		}
 	} else {
 		toDelete = append(toDelete, opts.Identifier)
@@ -205,7 +201,7 @@ func deleteCaches(opts *DeleteOptions, client *api.Client, repo ghrepo.Interface
 	return nil
 }
 
-func deleteCacheByID(client *api.Client, repo ghrepo.Interface, id int) error {
+func deleteCacheByID(client *api.Client, repo ghrepo.Interface, id int64) error {
 	// returns HTTP 204 (NO CONTENT) on success
 	path := fmt.Sprintf("repos/%s/actions/caches/%d", ghrepo.FullName(repo), id)
 	return client.REST(repo.RepoHost(), "DELETE", path, nil, nil)
@@ -231,7 +227,7 @@ func deleteCacheByKey(client *api.Client, repo ghrepo.Interface, key, ref string
 	return payload.TotalCount, nil
 }
 
-func parseCacheID(arg string) (int, bool) {
-	id, err := strconv.Atoi(arg)
+func parseCacheID(arg string) (int64, bool) {
+	id, err := strconv.ParseInt(arg, 10, 64)
 	return id, err == nil
 }
