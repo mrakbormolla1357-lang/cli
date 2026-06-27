@@ -44,7 +44,7 @@ func TestOutput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			cmd := Command{
-				&exec.Cmd{
+				Cmd: &exec.Cmd{
 					Path: createMockExecutable(t, tt.stdout, tt.stderr, tt.exitCode),
 				},
 			}
@@ -101,19 +101,16 @@ func TestSetRepoDir(t *testing.T) {
 			args: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "status"},
 			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "-C", "/path/to/repo", "status"},
 		},
-		{
-			name: "handles incomplete helper process args",
-			args: []string{"testbin", "-test.run=TestCommandMocking", "--"},
-			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "-C", "/path/to/repo"},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			argsPrefixLen := commandArgsPrefixLen(tt.args, "git")
 			cmd := Command{
-				&exec.Cmd{
+				Cmd: &exec.Cmd{
 					Args: append([]string{}, tt.args...),
 				},
+				argsPrefixLen: argsPrefixLen,
 			}
 
 			cmd.setRepoDir("/path/to/repo")

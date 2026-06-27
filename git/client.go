@@ -95,7 +95,19 @@ func (c *Client) Command(ctx context.Context, args ...string) (*Command, error) 
 	cmd.Stderr = c.Stderr
 	cmd.Stdin = c.Stdin
 	cmd.Stdout = c.Stdout
-	return &Command{cmd}, nil
+	return &Command{
+		Cmd:           cmd,
+		argsPrefixLen: commandArgsPrefixLen(cmd.Args, c.GitPath),
+	}, nil
+}
+
+func commandArgsPrefixLen(args []string, commandPath string) int {
+	for i, arg := range args {
+		if arg == commandPath {
+			return i
+		}
+	}
+	return 0
 }
 
 // CredentialPattern is used to inform AuthenticatedCommand which patterns Git should match
