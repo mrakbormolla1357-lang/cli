@@ -65,6 +65,59 @@ func TestOutput(t *testing.T) {
 	}
 }
 
+func TestSetRepoDir(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "inserts repo dir after command",
+			args: []string{"git", "status"},
+			want: []string{"git", "-C", "/path/to/repo", "status"},
+		},
+		{
+			name: "updates existing repo dir",
+			args: []string{"git", "-C", "/old/path", "status"},
+			want: []string{"git", "-C", "/path/to/repo", "status"},
+		},
+		{
+			name: "completes dangling repo dir flag",
+			args: []string{"git", "-C"},
+			want: []string{"git", "-C", "/path/to/repo"},
+		},
+		{
+			name: "handles short args",
+			args: []string{"git"},
+			want: []string{"git", "-C", "/path/to/repo"},
+		},
+		{
+			name: "inserts repo dir after helper process args",
+			args: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "status"},
+			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "-C", "/path/to/repo", "status"},
+		},
+		{
+			name: "handles incomplete helper process args",
+			args: []string{"testbin", "-test.run=TestCommandMocking", "--"},
+			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "-C", "/path/to/repo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := Command{
+				&exec.Cmd{
+					Args: append([]string{}, tt.args...),
+				},
+			}
+
+			cmd.setRepoDir("/path/to/repo")
+
+			assert.Equal(t, tt.want, cmd.Args)
+		})
+	}
+}
+
 func createMockExecutable(t *testing.T, stdout string, stderr string, exitCode int) string {
 	tmpDir := t.TempDir()
 	sourcePath := filepath.Join(tmpDir, "main.go")

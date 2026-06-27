@@ -20,7 +20,7 @@ The organization in which the acceptance tests can manage resources in. Consider
 
 #### `GH_ACCEPTANCE_TOKEN`
 
-The token to use for authenticatin with the `GH_ACCEPTANCE_HOST`. This must already have the necessary scopes for each test, and must have permissions to act in the `GH_ACCEPTANCE_ORG`. See [Effective Test Authoring](#effective-test-authoring) for how tests must handle tokens without sufficient scopes.
+The token to use for authentication with the `GH_ACCEPTANCE_HOST`. This must already have the necessary scopes for each test, and must have permissions to act in the `GH_ACCEPTANCE_ORG`. See [Effective Test Authoring](#effective-test-authoring) for how tests must handle tokens without sufficient scopes.
 
 It's recommended to create and use a Legacy PAT for this; Fine-Grained PATs do not offer all the necessary privileges required. You can use an OAuth token provided via `gh auth login --web` and can provide it to the acceptance tests via `GH_ACCEPTANCE_TOKEN=$(gh auth token --hostname <host>)` but this can be a bit confusing and annoying if you `gh auth login` again without `-s` and lose the required scopes.
 
@@ -53,7 +53,7 @@ This section is to be expanded over time as we write more tests and learn more.
 #### Environment Variables
 
 The following custom environment variables are made available to the scripts:
- * `GH_HOST`: Set to value of the `GH_ACCEPTANCE_ORG` env var provided to `go test`
+ * `GH_HOST`: Set to value of the `GH_ACCEPTANCE_HOST` env var provided to `go test`
  * `ORG`: Set to the value of the `GH_ACCEPTANCE_ORG` env var provided to `go test`
  * `GH_TOKEN`: Set to the value of the `GH_ACCEPTANCE_TOKEN` env var provided to `go test`
  * `RANDOM_STRING`: Set to a length 10 random string of letters to help isolate globally visible resources
