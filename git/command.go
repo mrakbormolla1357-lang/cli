@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"strings"
 
 	"github.com/cli/cli/v2/internal/run"
 )
@@ -76,18 +77,31 @@ func (gc *Command) setRepoDir(repoDir string) {
 		}
 	}
 
-	insertAt := 1
-	// Handle "--" invocations for testing purposes.
+	commandAt := 0
+	// Handle the test helper process separator without treating git's own
+	// "--" pathspec separator as the command location.
 	for i, arg := range gc.Args {
-		if arg == "--" {
-			insertAt = i + 2
+		if arg == "--" && hasTestFlag(gc.Args[:i]) {
+			commandAt = i + 1
+			break
 		}
 	}
+
+	insertAt := commandAt + 1
 	if insertAt > len(gc.Args) {
 		insertAt = len(gc.Args)
 	}
 
 	gc.Args = append(gc.Args[:insertAt], append([]string{"-C", repoDir}, gc.Args[insertAt:]...)...)
+}
+
+func hasTestFlag(args []string) bool {
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-test.") {
+			return true
+		}
+	}
+	return false
 }
 
 // Allow individual commands to be modified from the default client options.

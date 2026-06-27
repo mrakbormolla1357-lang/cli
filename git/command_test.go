@@ -92,6 +92,11 @@ func TestSetRepoDir(t *testing.T) {
 			want: []string{"git", "-C", "/path/to/repo"},
 		},
 		{
+			name: "inserts repo dir before git pathspec separator",
+			args: []string{"git", "diff", "--", "file.txt"},
+			want: []string{"git", "-C", "/path/to/repo", "diff", "--", "file.txt"},
+		},
+		{
 			name: "inserts repo dir after helper process args",
 			args: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "status"},
 			want: []string{"testbin", "-test.run=TestCommandMocking", "--", "git", "-C", "/path/to/repo", "status"},
